@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../../src/TaskAssist.Core/TaskAssist.Core.csproj"/>
+   <Content Include="../../fixtures/mail_scenarios.json" Link="fixtures/mail_scenarios.json" CopyToOutputDirectory="PreserveNewest"/>
+  </ItemGroup>
+</Project>
