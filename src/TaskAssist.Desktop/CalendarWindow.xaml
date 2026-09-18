@@ -1,0 +1,20 @@
+<Window x:Class="TaskAssist.Desktop.CalendarWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ Title="カレンダー・回答集め — 架空データ版 0.3.0" Width="1360" Height="900" MinWidth="860" MinHeight="620" WindowStartupLocation="CenterOwner">
+ <DockPanel Margin="20,14">
+  <StackPanel DockPanel.Dock="Top">
+   <TextBlock Text="カレンダー・回答集め" FontSize="25" FontWeight="SemiBold"/>
+   <TextBlock Text="日を選ぶ → 案件を選ぶ → 担当の状況をクリックで記録。"/>
+   <WrapPanel x:Name="Toolbar"/>
+   <TextBlock x:Name="SaveMessage" AutomationProperties.Name="カレンダーの保存状態"/>
+   <WrapPanel x:Name="PaneSwitch" Visibility="Collapsed"/>
+  </StackPanel>
+  <TextBlock DockPanel.Dock="Bottom" Text="依頼済み・回答ありはローカルの記録です。この操作でメールは読み取り・送信されません。" FontSize="12"/>
+  <Grid x:Name="LayoutGrid">
+   <Grid.ColumnDefinitions><ColumnDefinition Width="1*"/><ColumnDefinition Width="16"/><ColumnDefinition Width="1*"/></Grid.ColumnDefinitions>
+   <ScrollViewer x:Name="CalendarScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel x:Name="CalendarPanel"/></ScrollViewer>
+   <Border x:Name="DetailsFrame" Grid.Column="2" BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}" BorderThickness="1" CornerRadius="8" Padding="14">
+    <ScrollViewer x:Name="DetailsScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel x:Name="DetailsPanel"/></ScrollViewer>
+   </Border>
+  </Grid>
+ </DockPanel>
+</Window>

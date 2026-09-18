@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>WinExe</OutputType><UseWPF>true</UseWPF><AssemblyName>TaskAssist</AssemblyName></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../TaskAssist.Core/TaskAssist.Core.csproj"/>
+  </ItemGroup>
+</Project>
