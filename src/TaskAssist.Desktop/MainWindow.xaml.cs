@@ -105,9 +105,9 @@ public partial class MainWindow : Window
         if (busy) return;
         var now = clock.Now;
         var alerts = Policy.Alerts(state, now).Count;
-        var dueReview = state.Tasks.Count(t => !t.Closed && t.ReviewOn <= Japan.Day(now));
+        var dueReview = Policy.Reviews(state,now).Count;
         var pendingDates = PendingDateAttention().Count;
-        TimeAttention.Text = $"期限の注意 {alerts}件 ／ 次に見る日が来た仕事 {dueReview}件\n未確定の日付候補の注意 {pendingDates}件・受付の確認待ち {state.Inbox.Count(m => m.Pending)}件\n日本時間 {now.ToOffset(Japan.Offset):M/d HH:mm}・一覧は「最新の注意を開く」";
+        TimeAttention.Text = $"期限の注意 {alerts}件 ／ 期限・次に見る日の確認 {dueReview}件\n未確定の日付候補の注意 {pendingDates}件・受付の確認待ち {state.Inbox.Count(m => m.Pending)}件\n日本時間 {now.ToOffset(Japan.Offset):M/d HH:mm}・一覧は「最新の注意を開く」";
         if (pendingDatesAttention is not null)
         {
             pendingDatesAttention.Content = $"未確定の日付候補の注意 {pendingDates}件（確定締切とは別）";
