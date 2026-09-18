@@ -1,15 +1,21 @@
-<Window x:Class="TaskAssist.Desktop.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="仕事アシスト — 架空データ版 0.3.0" Width="1080" Height="840" MinWidth="660" MinHeight="560" WindowStartupLocation="CenterScreen">
+<Window x:Class="TaskAssist.Desktop.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="仕事アシスト" Width="1080" Height="840" MinWidth="660" MinHeight="560" WindowStartupLocation="CenterScreen">
  <DockPanel Margin="24,18">
   <StackPanel DockPanel.Dock="Top">
    <DockPanel><Button Content="カレンダー・回答集め" DockPanel.Dock="Right" Click="CalendarClicked"/><TextBlock Text="仕事アシスト" FontSize="27" FontWeight="SemiBold"/></DockPanel>
    <TextBlock Text="一度にひとつ。今の仕事から、落ち着いて進めましょう。"/>
    <Border BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}" BorderThickness="1" Padding="12" Margin="0,9,0,12">
-    <StackPanel><TextBlock Text="受付の状態" FontWeight="Bold"/><TextBlock x:Name="Health"/><TextBlock x:Name="SaveStatus"/><DockPanel><Button Content="最新の注意を開く" DockPanel.Dock="Right" Click="TimeAttentionClicked"/><TextBlock x:Name="TimeAttention" VerticalAlignment="Center"/></DockPanel></StackPanel>
+    <StackPanel>
+     <Expander>
+      <Expander.Header><TextBlock x:Name="ConnectionSummary"/></Expander.Header>
+      <ScrollViewer MaxHeight="210" VerticalScrollBarVisibility="Auto"><StackPanel><TextBlock x:Name="Health"/><TextBlock x:Name="SaveStatus"/></StackPanel></ScrollViewer>
+     </Expander>
+     <DockPanel><Button Content="最新の注意を開く" DockPanel.Dock="Right" Click="TimeAttentionClicked"/><TextBlock x:Name="TimeAttention" VerticalAlignment="Center"/></DockPanel>
+    </StackPanel>
    </Border>
    <DockPanel><Button Content="用件を登録" DockPanel.Dock="Right" Click="AddClicked"/><TextBox x:Name="QuickTitle" AutomationProperties.Name="電話・口頭の用件" MaxLength="500" VerticalContentAlignment="Center" ToolTip="電話・口頭の用件だけで登録できます。Enterでは登録しません。"/></DockPanel>
    <TextBlock Text="電話・口頭の用件を入力し「用件を登録」。締切や担当は後から追加できます。" FontSize="12"/>
   </StackPanel>
-  <TextBlock DockPanel.Dock="Bottom" Text="登録した内容はこのWindows利用者の保存領域に残ります。メールの読取り・送信機能は未接続です。" FontSize="12" Margin="0,10,0,0"/>
+  <TextBlock DockPanel.Dock="Bottom" Text="記録はこのWindows利用者の保存領域に残ります。Outlook読取り・本人通知・添付保存は範囲を確認して個別に有効化します。" FontSize="12" Margin="0,10,0,0"/>
   <TabControl x:Name="Tabs">
    <TabItem Header="ホーム"><ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel x:Name="Home" Margin="14"/></ScrollViewer></TabItem>
    <TabItem Header="すべて・検索"><ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel x:Name="All" Margin="14"/></ScrollViewer></TabItem>

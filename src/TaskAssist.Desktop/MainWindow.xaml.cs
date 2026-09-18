@@ -23,6 +23,7 @@ public partial class MainWindow : Window
     private string search = "";
     private bool beginner = true, busy;
     private double scale = 1;
+    private Button? pendingDatesAttention;
     private readonly DispatcherTimer attentionTimer = new() { Interval = TimeSpan.FromSeconds(30) };
     private readonly List<WeakReference<TextBlock>> timedLabels = [];
     public MainWindow(string folder, ProfileStore? profiles = null)
@@ -41,11 +42,12 @@ public partial class MainWindow : Window
             catch (JsonException) { SaveStatus.Text = "表示設定を読めないため初期表示で起動しました。"; }
         }
         FontSize = 15 * scale;
+        InitializeIntegration();
         Refresh();
         attentionTimer.Tick += (_, _) => UpdateTimeAttention(); attentionTimer.Start();
         Activated += (_, _) => UpdateTimeAttention();
         Closed += (_, _) => { attentionTimer.Stop(); repository.Dispose(); };
-        Closing += (_, e) => { if (busy) { e.Cancel = true; return; } if (!string.IsNullOrWhiteSpace(QuickTitle.Text)) e.Cancel = MessageBox.Show(this, "入力中の用件はまだ登録されていません。閉じますか？", "入力中の用件", MessageBoxButton.YesNo) != MessageBoxResult.Yes; };
+        Closing += (_, e) => { if (busy || integrationBusy) { CancelIntegration(); e.Cancel = true; return; } if (!string.IsNullOrWhiteSpace(QuickTitle.Text)) e.Cancel = MessageBox.Show(this, "入力中の用件はまだ登録されていません。閉じますか？", "入力中の用件", MessageBoxButton.YesNo) != MessageBoxResult.Yes; };
     }
     private static TextBlock Text(string value, double size = 0, bool bold = false) => new()
     { Text = value, FontSize = size > 0 ? size : 15, FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal };
@@ -85,11 +87,18 @@ public partial class MainWindow : Window
     {
         state = service.Read();
         timedLabels.Clear();
-        Title = "仕事アシスト — " + (state.IsDemo ? "架空画面試験" : "ローカル版 0.4.0");
-        Health.Text = state.IsDemo ? state.IntakeText : "所属：" + profiles!.Load().Active.Name + "\n手動登録で利用中／メールの自動受付は未接続";
+        Title = "仕事アシスト — " + (state.IsDemo ? "架空画面試験" : AppRelease.Version + " 接続検証版");
+        UpdateConnectionDisplay();
         SaveStatus.Text = "ローカル保存済み：" + (state.SavedAt?.ToOffset(Japan.Offset).ToString("yyyy/MM/dd HH:mm:ss") ?? "まだ操作なし");
         DrawHome(); DrawTasks(); DrawInbox(); DrawHistory(); DrawSettings();
         UpdateTimeAttention();
+    }
+    private string HealthText(Snapshot snapshot) => snapshot.IsDemo ? snapshot.IntakeText : "所属：" + profiles!.Load().Active.Name + "\n" + ConnectorHealth(snapshot);
+    private void UpdateConnectionDisplay()
+    {
+        Health.Text = HealthText(state);
+        var connector = state.Automation.Connector;
+        ConnectionSummary.Text = state.IsDemo ? "架空受付の状態・保存の詳細" : $"受付：{(connector.Enabled ? connector.Health : "読取り停止中") }・状態と保存の詳細";
     }
     private void UpdateTimeAttention()
     {
@@ -97,7 +106,13 @@ public partial class MainWindow : Window
         var now = clock.Now;
         var alerts = Policy.Alerts(state, now).Count;
         var dueReview = state.Tasks.Count(t => !t.Closed && t.ReviewOn <= Japan.Day(now));
-        TimeAttention.Text = $"期限の注意 {alerts}件 ／ 次に見る日が来た仕事 {dueReview}件\n日本時間 {now.ToOffset(Japan.Offset):M/d HH:mm}・一覧は「最新の注意を開く」";
+        var pendingDates = PendingDateAttention().Count;
+        TimeAttention.Text = $"期限の注意 {alerts}件 ／ 次に見る日が来た仕事 {dueReview}件\n未確定の日付候補の注意 {pendingDates}件・受付の確認待ち {state.Inbox.Count(m => m.Pending)}件\n日本時間 {now.ToOffset(Japan.Offset):M/d HH:mm}・一覧は「最新の注意を開く」";
+        if (pendingDatesAttention is not null)
+        {
+            pendingDatesAttention.Content = $"未確定の日付候補の注意 {pendingDates}件（確定締切とは別）";
+            pendingDatesAttention.IsEnabled = pendingDates > 0;
+        }
         timedLabels.RemoveAll(reference => !reference.TryGetTarget(out _));
         foreach (var reference in timedLabels)
             if (reference.TryGetTarget(out var label) && label.Tag is Func<string> value) label.Text = value();
@@ -113,6 +128,7 @@ public partial class MainWindow : Window
         void Draw()
         {
             panel.Children.Clear();
+            if (PendingDateAttention().Count > 0) panel.Children.Add(Button("未確定の日付候補を確認する",() => { dialog.Close(); ShowPendingDates(); }));
             var tasks = Policy.Alerts(state, clock.Now).Concat(Policy.Reviews(state, clock.Now)).DistinctBy(t => t.Id).ToList();
             panel.Children.Add(Body($"期限の注意・確認対象：全{tasks.Count}件（期限未確認も含む）"));
             foreach (var task in tasks.Skip(page*10).Take(10)) panel.Children.Add(Card(TaskCard(task, task.ReviewOn <= Japan.Day(clock.Now) ? "次に見る日が来ています。" : null, () => dialog.Close())));
@@ -154,6 +170,33 @@ public partial class MainWindow : Window
         if (current is not null) Home.Children.Add(Card(TaskCard(current)));
         else Home.Children.Add(Card(Body("今の仕事を選んでください。「これを進める」で、ここに固定されます。")));
         Heading(Home, "確認が必要");
+        pendingDatesAttention = Button("未確定の日付候補の注意",ShowPendingDates);
+        Home.Children.Add(pendingDatesAttention);
+        foreach (var conflict in AutomationPolicy.Conflicts(state,clock.Now)) Home.Children.Add(Card(Body(conflict,true)));
+        foreach (var recurrence in state.Automation.Recurrences.Where(r => r.Enabled && (AutomationPolicy.PendingCount(r,Japan.Day(clock.Now)) < 0 || r.CatchUp == CatchUpChoice.Ask && AutomationPolicy.PendingCount(r,Japan.Day(clock.Now)) > 1)))
+            Home.Children.Add(Card(Body("繰り返しの発生分を確認してください：" + recurrence.Title + "（設定・繰り返し業務）")));
+        DrawHomeReviews();
+        UpdateTimeAttention();
+    }
+    private List<InboxItem> PendingDateAttention() => AutomationPolicy.PendingDeadlineSources(state,clock.Now);
+    private void ShowPendingDates()
+        {
+            var dialog = Dialog("未確定の日付候補を原文で確認",out var panel);
+            foreach (var mail in PendingDateAttention())
+            {
+                var card = InboxSource(mail);
+                foreach (var hint in mail.DeadlineHints) card.Children.Add(Body($"未確定：{hint.Text} → {hint.Day:yyyy/MM/dd}{(hint.EndDay is {} end ? "〜" + end.ToString("yyyy/MM/dd") : "")}\n{hint.Warning}\n原文抜粋：{hint.Excerpt}"));
+                card.Children.Add(Button("受付で確認・判定する",() =>
+                {
+                    inboxPage = Math.Max(0,state.Inbox.OrderBy(m => !m.Pending).ThenBy(m => m.ReceivedAt).ThenBy(m => m.SourceKey).ToList().FindIndex(m => m.Id == mail.Id)) / 15;
+                    dialog.Close(); DrawInbox(); Tabs.SelectedIndex = 2;
+                }));
+                panel.Children.Add(Card(card));
+            }
+            dialog.ShowDialog();
+        }
+    private void DrawHomeReviews()
+    {
         var reviews = state.Inbox.Where(m => m.Pending).OrderBy(m => m.ReviewOn > Japan.Day(clock.Now)).ThenBy(m => m.ReceivedAt).ThenBy(m => m.Id).ToList();
         var unknown = Policy.Reviews(state, clock.Now);
         var total = reviews.Count + unknown.Count;
@@ -213,14 +256,15 @@ public partial class MainWindow : Window
         if (mail.Pending) foreach (var choice in new[] { "仕事にする", "対応不要", "後で確認" }) row.Children.Add(Button(choice, () => Run(() => service.ReviewInbox(mail.Id, choice))));
         if (mail.Status == IntakeStatus.Ignored) row.Children.Add(Button("判定を戻す", () => Run(() => service.RestoreInboxReview(mail.Id))));
         if (mail.TaskId is {} id) row.Children.Add(Button("登録した仕事を開く", () => Edit(state.Tasks.Single(t => t.Id == id))));
-        box.Children.Add(row); return box;
+        box.Children.Add(row); AddMailActions(box,mail); return box;
     }
     private void DrawInbox()
     {
-        if (!state.IsDemo) { Inbox.Children.Clear(); Heading(Inbox, "メールの自動受付は未接続です"); Inbox.Children.Add(Body("この版では、用件の登録とカレンダーから案件を登録できます。実メールの読取り・送信は行いません。")); return; }
-        Inbox.Children.Clear(); Heading(Inbox, "架空メールの受付記録");
+        Inbox.Children.Clear(); Heading(Inbox, state.IsDemo ? "架空メールの受付記録" : "Outlookから保存した受付記録");
+        if (state.IsDemo) {
         var controls = new WrapPanel(); controls.Children.Add(Button("同梱の架空メールを再照合", () => Run(() => service.ImportDemo(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "fixtures", "mail_scenarios.json"))))));
         controls.Children.Add(Button(state.DemoConnected ? "架空受付を停止" : "架空受付を再開", () => Run(() => service.SetDemoConnection(!state.DemoConnected)))); Inbox.Children.Add(controls);
+        } else { Inbox.Children.Add(Body(ConnectorHealth(state))); Inbox.Children.Add(Button("保存済み受付の表示を更新",Refresh)); }
         Inbox.Children.Add(Body($"全{state.Inbox.Count}件。対応不要も消さずに保持します。自然文から期限・優先度を確定する機能は未実装です。"));
         var items = state.Inbox.OrderBy(m => !m.Pending).ThenBy(m => m.ReceivedAt).ThenBy(m => m.SourceKey).ToList();
         Page(Inbox, items, ref inboxPage, InboxCard, DrawInbox);
@@ -233,6 +277,7 @@ public partial class MainWindow : Window
         Page(History, events, ref historyPage, ev =>
         {
             var panel = new StackPanel(); panel.Children.Add(Body(ev.At.ToOffset(Japan.Offset).ToString("MM/dd HH:mm:ss") + "  " + ev.Label, true));
+            if (ev.ConfigurationAfter.Length > 0) panel.Children.Add(Button("設定の変更前・変更後を見る",() => { var dialog = Dialog("設定変更の記録",out var contents); contents.Children.Add(Body("変更前\n" + ev.ConfigurationBefore + "\n変更後\n" + ev.ConfigurationAfter)); dialog.ShowDialog(); }));
             foreach (var task in ev.After.Values)
             {
                 ev.Before.TryGetValue(task.Id, out var previous);
@@ -318,6 +363,8 @@ public partial class MainWindow : Window
         var planned = CheckedDate(panel, "作業候補の日（締切とは別）", task.PlannedOn);
         var note = Field("再開メモ・必要な判断（任意）", task.Note, true); var steps = Field("完了済みの手順（工程だけの記録）", task.DoneSteps, true);
         var material = Field("資料の参照メモ（任意・自動で開きません）", task.Material, true);
+        var estimate = Field("所要時間（任意・分。空欄は不明）",task.EstimatedMinutes?.ToString() ?? "");
+        var urgent = new CheckBox { Content = "本人が緊急の調整対象と確認", IsChecked = task.UrgentConfirmed }; panel.Children.Add(urgent);
         panel.Children.Add(Body("前提作業（任意・Ctrlで複数選択）"));
         var dependencies = new ListBox { ItemsSource = state.Tasks.Where(t => t.Id != task.Id).ToList(), DisplayMemberPath = "Title", SelectionMode = SelectionMode.Multiple, MaxHeight = 140 };
         foreach (WorkItem item in dependencies.Items) if (task.Prerequisites.Contains(item.Id)) dependencies.SelectedItems.Add(item);
@@ -336,13 +383,16 @@ public partial class MainWindow : Window
                 at = new DateTimeOffset(day.Value.ToDateTime(parsed), Japan.Offset);
             }
             draft.Title = title.Text; draft.NextAction = next.Text; draft.Completion = completion.Text; draft.ConfirmCompletion = required.IsChecked == true;
-            draft.Deadline = new Deadline(k, k == DeadlineKind.Date ? day : null, at, k == DeadlineKind.Unknown ? "未確認" : basis.Text);
+            draft.Deadline = new Deadline(k, k == DeadlineKind.Date ? day : null, at, k == DeadlineKind.Unknown ? "未確認" : basis.Text,
+                basis.Text == task.Deadline.Evidence ? task.Deadline.SourceId : "");
             draft.ReviewOn = review.ReadValue(); draft.PlannedOn = planned.ReadValue();
             draft.Note = note.Text; draft.DoneSteps = steps.Text; draft.Material = material.Text;
+            draft.EstimatedMinutes = string.IsNullOrWhiteSpace(estimate.Text) ? null : int.Parse(estimate.Text,System.Globalization.CultureInfo.InvariantCulture); draft.UrgentConfirmed = urgent.IsChecked == true;
             draft.Prerequisites = dependencies.SelectedItems.Cast<WorkItem>().Select(t => t.Id).ToList(); draft.ParentId = parent.SelectedValue as string; if (draft.ParentId == "") draft.ParentId = null;
             service.Edit(draft, task.Version);
         })));
         if (!task.Closed) panel.Children.Add(Button("この仕事を取りやめる", () => { if (MessageBox.Show(dialog, "仕事を取りやめ状態にします。記録は残り、履歴から戻せます。", "取りやめ", MessageBoxButton.YesNo) == MessageBoxResult.Yes) SaveDialog(dialog, () => service.Transition(task.Id, task.Version, WorkStatus.Cancelled)); }));
+        if (!task.Closed) panel.Children.Add(Button("引継ぎ済みとして記録する",() => { if (Confirm("この仕事を引継ぎ済みとして記録します。外部への送信は行いません。引継ぎを確認しましたか？")) SaveDialog(dialog,() => service.Transition(task.Id,task.Version,WorkStatus.HandedOver,note.Text)); }));
         dialog.ShowDialog();
     }
     private StackPanel InboxSource(InboxItem mail)
@@ -367,7 +417,7 @@ public partial class MainWindow : Window
     {
         Settings.Children.Clear(); Heading(Settings, "表示と保存の状態");
         DrawProfileSettings();
-        Settings.Children.Add(Body("実メール接続・送信・添付保存・外部解析は、この版では利用できません。"));
+        DrawIntegrationSettings();
         Settings.Children.Add(Body("文字の大きさ")); var row = new WrapPanel();
         foreach (var s in new[] { 1d, 1.5, 2d }) row.Children.Add(Button($"{s*100:0}%", () => SavePreferences(s, beginner))); Settings.Children.Add(row);
         Settings.Children.Add(Button(beginner ? "通常表示にする" : "説明を多く表示する", () => SavePreferences(scale, !beginner)));
@@ -375,10 +425,11 @@ public partial class MainWindow : Window
         Settings.Children.Add(Body($"仕事 {state.Tasks.Count}件／受付 {state.Inbox.Count}件／履歴 {state.Events.Count}件／記録形式 {AppRelease.Schema}"));
         Settings.Children.Add(Body("バックアップは同じ端末内の退避です。端末故障や別利用者への移行対策ではありません。"));
         Settings.Children.Add(Button("整合バックアップを作成", () => Run(() => repository.Backup(Path.Combine(folder, "backups")), () => SaveStatus.Text = "バックアップ作成・整合性確認済み")));
-        var backups = Directory.Exists(Path.Combine(folder, "backups")) ? Directory.GetFiles(Path.Combine(folder, "backups"), "backup-*.db").OrderDescending().ToList() : [];
+        var backups = Directory.Exists(Path.Combine(folder, "backups")) ? Directory.GetFiles(Path.Combine(folder, "backups"), "backup-*.db",SearchOption.AllDirectories).OrderDescending().ToList() : [];
         var backup = new ComboBox { ItemsSource = backups.Select(Path.GetFileName).ToList(), SelectedIndex = backups.Count > 0 ? 0 : -1 }; Settings.Children.Add(backup);
         Settings.Children.Add(Button("選んだ退避から復元", () =>
         {
+            if (integrationBusy) { MessageBox.Show(this,"外部処理中です。停止してから復元してください。"); return; }
             if (backup.SelectedIndex < 0) return;
             var source = backups[backup.SelectedIndex];
             if (MessageBox.Show(this, "選んだ退避以後の変更は復元先に含まれません。現在の記録も退避して保持します。実メールの自動処理は無効のままです。復元しますか？", "復元内容の確認", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
@@ -398,7 +449,21 @@ public partial class MainWindow : Window
             });
         }));
         Settings.Children.Add(Button("診断をローカル保存", () => Run(() => File.WriteAllText(Path.Combine(folder, "diagnostics.json"), JsonSerializer.Serialize(new
-        { version = AppRelease.Version, schema = AppRelease.Schema, os = Environment.OSVersion.VersionString, runtime = Environment.Version.ToString(), outlook = "not_connected", externalActions = "disabled", revision = state.Revision })), () => SaveStatus.Text = "診断を保存しました。件名・本文・宛先・実パスは含めていません。")));
-        Settings.Children.Add(Body("自動バックアップの世代管理・別PCへの移行・実メール接続・繰り返し登録は未対応です。端末変更の前に移行方法の確認が必要です。"));
+        { version = AppRelease.Version, schema = AppRelease.Schema, os = Environment.OSVersion.VersionString, runtime = Environment.Version.ToString(), outlookEnabled = state.Automation.Connector.Enabled, pendingExternal = state.Automation.Jobs.Count(j => j.State == JobState.OutcomeUnknown), revision = state.Revision })), () => SaveStatus.Text = "診断を保存しました。件名・本文・宛先・実パスは含めていません。")));
+        Settings.Children.Add(Button("選んだ更新前退避で旧版0.4へ戻す準備",() =>
+        {
+            if (integrationBusy || backup.SelectedIndex < 0) return;
+            var source = backups[backup.SelectedIndex];
+            if (!Confirm("更新前（記録形式3）の退避を別ファイルへ検証復元し、この版を終了します。更新後の記録は退避して保持しますが、旧版では表示されません。終了後は保管してある旧版0.4を開いてください。この版を再び開くと新形式へ戻ります。実行しますか？")) return;
+            integrationTimer.Stop();
+            Run(() =>
+            {
+                service.SuspendAutomation(); repository.Backup(Path.Combine(folder,"backups"));
+                var filename = "legacy-restored-" + Guid.NewGuid().ToString("N") + ".db";
+                SqliteRepository.RestoreToNew(source,Path.Combine(folder,filename),profileId,forLegacyApplication:true);
+                var pointer = Path.Combine(folder,"active-data.txt"); File.WriteAllText(pointer + ".new",filename); File.Move(pointer + ".new",pointer,true);
+            },() => Dispatcher.BeginInvoke(Close));
+        }));
+        Settings.Children.Add(Body("別PC・別Windows利用者への保護された記録の移行は未対応です。表示設定だけは書き出せます。外部AI解析・無断更新は行いません。"));
     }
 }

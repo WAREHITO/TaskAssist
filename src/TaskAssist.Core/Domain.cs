@@ -7,7 +7,7 @@ public enum DeadlineKind { Unknown, None, Date, DateTime }
 public enum IntakeStatus { NeedsReview, ReadBlocked, LinkedTask, Ignored }
 
 public sealed record Deadline(DeadlineKind Kind = DeadlineKind.Unknown, DateOnly? Date = null,
-    DateTimeOffset? At = null, string Evidence = "未確認")
+    DateTimeOffset? At = null, string Evidence = "未確認", string SourceId = "")
 {
     public void Validate()
     {
@@ -65,6 +65,8 @@ public sealed record WorkItem
     public string Note { get; set; } = "";
     public string DoneSteps { get; set; } = "";
     public string Material { get; set; } = "";
+    public int? EstimatedMinutes { get; set; }
+    public bool UrgentConfirmed { get; set; }
     public string? ParentId { get; set; }
     public List<string> Prerequisites { get; set; } = [];
     public List<string> SourceIds { get; set; } = [];
@@ -80,6 +82,16 @@ public sealed record WorkItem
 }
 public sealed record InboxItem
 {
+    public bool IsOutlook { get; init; }
+    public List<MailLocation> Locations { get; set; } = [];
+    public string InternetId { get; init; } = "";
+    public string Fingerprint { get; init; } = "";
+    public string DeadlineCandidate { get; set; } = "";
+    public List<MailAttachment> Attachments { get; init; } = [];
+    public bool Purged { get; init; }
+    public bool SourceReadable { get; init; } = true;
+    public List<DeadlineHint> DeadlineHints { get; init; } = [];
+    public DateTimeOffset? LastModifiedAt { get; init; }
     public string Id { get; init; } = Guid.NewGuid().ToString("N");
     public string SourceKey { get; init; } = "";
     public int Version { get; set; } = 1;
@@ -99,6 +111,8 @@ public sealed record ChangeEvent
     public string Id { get; init; } = Guid.NewGuid().ToString("N");
     public DateTimeOffset At { get; init; }
     public string Label { get; init; } = "";
+    public string ConfigurationBefore { get; init; } = "";
+    public string ConfigurationAfter { get; init; } = "";
     public Dictionary<string, WorkItem> Before { get; init; } = [];
     public Dictionary<string, WorkItem> After { get; init; } = [];
     public Dictionary<string, InboxItem> InboxBefore { get; init; } = [];
@@ -108,6 +122,7 @@ public sealed record ChangeEvent
 }
 public sealed class Snapshot
 {
+    public AutomationState Automation { get; set; } = new();
     public string ProfileId { get; set; } = "demo";
     public bool IsDemo => ProfileId == "demo";
     public long Revision { get; set; }
@@ -157,8 +172,9 @@ public static class Policy
             throw new RuleException("所属の識別情報が不正です。");
         if (state.Tasks.Concat(state.Events.SelectMany(e => e.Before.Values.Concat(e.After.Values))).Any(t => t.Profile != state.ProfileId))
             throw new RuleException("異なる所属の記録が混在しています。保存・復元を止めました。");
-        if (!state.IsDemo && (state.Inbox.Count > 0 || state.Tasks.Any(t => t.DemoTemplate.Length > 0)))
+        if (!state.IsDemo && (state.Inbox.Any(m => !m.IsOutlook) || state.Tasks.Any(t => t.DemoTemplate.Length > 0)))
             throw new RuleException("本番の手動登録版に架空受付の記録を混ぜることはできません。");
+        AutomationPolicy.Validate(state);
         ResponsePolicy.ValidateRoster(state.TeamRoster);
         if (state.Tasks.GroupBy(t => t.Profile).Any(g => g.Count(t => t.Status == WorkStatus.Working) > 1))
             throw new RuleException("作業中の仕事は1件です。現在の作業を中断してから戻してください。");

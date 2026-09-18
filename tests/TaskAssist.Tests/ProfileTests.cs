@@ -71,7 +71,9 @@ internal static class ProfileTests
         {
             var store=Store("restore");var a=store.CreateFirst("架空");using var repo=store.Open(a.Id);var s=new TaskService(repo,new FakeClock());s.Add("架空の復旧");
             var backup=repo.Backup(Path.Combine(store.Root,"backup"));var dest=Path.Combine(store.Root,"restored.db");SqliteRepository.RestoreToNew(backup,dest,a.Id);
-            using var restored=new SqliteRepository(dest,a.Id);Check(Copy.Json(restored.Load())==Copy.Json(repo.Load()),"Restore mismatch");
+            using var restored=new SqliteRepository(dest,a.Id);var actual=restored.Load();var original=repo.Load();
+            Check(actual.ProfileId==original.ProfileId && Copy.Json(actual.Tasks)==Copy.Json(original.Tasks) && Copy.Json(actual.Inbox)==Copy.Json(original.Inbox) && Copy.Json(actual.Events)==Copy.Json(original.Events) && Copy.Json(actual.TeamRoster)==Copy.Json(original.TeamRoster),"Restored business data mismatch");
+            Check(actual.Automation.RestoreGeneration==original.Automation.RestoreGeneration+1 && !actual.Automation.Connector.Enabled && !actual.Automation.DigestEnabled,"Restore must suspend external processing");
         });
         test("LOCAL-08", "Roster changes preserve previous team names, answers and history", () =>
         {

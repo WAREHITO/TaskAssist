@@ -11,6 +11,12 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if (args.Contains("--outlook-probe"))
+        {
+            var reply = new OutlookClient().CallAsync(new() { Command = "probe" }).GetAwaiter().GetResult();
+            Console.WriteLine(JsonSerializer.Serialize(new { test = "outlook-version-only", reply.Success, reply.Code, reply.Version }));
+            Environment.ExitCode = reply.Success ? 0 : 1; return;
+        }
         var folder=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"TaskAssist","WindowTests",Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(folder);
         if(args.Contains("--profiles") || args.Contains("--profile-review"))

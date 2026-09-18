@@ -125,6 +125,9 @@ public sealed class ProfileStore(string root)
         var next = new WorkProfile { Name = ValidateName(name) };
         using var old = Open(expectedActive); var snapshot = old.Load();
         if (snapshot.Revision != expectedRevision) throw new RuleException("案件が更新されています。異動の確認をやり直してください。");
+        if (snapshot.Automation.Connector.Enabled || snapshot.Automation.DigestEnabled || snapshot.Automation.Recurrences.Any(r => r.Enabled) ||
+            snapshot.Automation.Jobs.Any(j => j.State is JobState.Running or JobState.OutcomeUnknown or JobState.Authorized))
+            throw new RuleException("先に自動処理を停止し、実行結果が未確認の処理を確認してください。");
         var unfinished = snapshot.Tasks.Where(t => !t.Closed).ToDictionary(t => t.Id);
         var chosen = decisions.ToList();
         if (chosen.Count != unfinished.Count || chosen.Select(d => d.TaskId).Distinct().Count() != chosen.Count ||

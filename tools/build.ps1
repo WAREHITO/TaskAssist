@@ -28,10 +28,11 @@ try {
     $desktop = 'src/TaskAssist.Desktop/TaskAssist.Desktop.csproj'
     $tests = 'tests/TaskAssist.Tests/TaskAssist.Tests.csproj'
     $windowsTests = 'tests/TaskAssist.WindowsTests/TaskAssist.WindowsTests.csproj'
-    foreach ($project in @($desktop, $tests, $windowsTests)) {
+    $worker = 'src/TaskAssist.OutlookWorker/TaskAssist.OutlookWorker.csproj'
+    foreach ($project in @($desktop, $tests, $windowsTests, $worker)) {
         Invoke-Dotnet @('restore', $project, '--locked-mode')
     }
-    foreach ($project in @($desktop, $tests, $windowsTests)) {
+    foreach ($project in @($desktop, $tests, $windowsTests, $worker)) {
         Invoke-Dotnet @('build', $project, '-c', 'Release', '--no-restore')
     }
     $runId = (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
@@ -50,7 +51,9 @@ try {
         $version = ([xml](Get-Content -LiteralPath 'Directory.Build.props' -Raw)).Project.PropertyGroup.Version
         $publishDir = Join-Path $repositoryRoot ".artifacts/publish/TaskAssist-$version-win-x64-$runId"
         Invoke-Dotnet @('publish', $desktop, '-c', 'Release', '-r', 'win-x64', '--self-contained', 'true',
-            '-p:RestoreLockedMode=true', '-o', $publishDir)
+            '-p:RestoreLockedMode=true', '-p:DebugType=None', '-p:DebugSymbols=false', '-o', $publishDir)
+        Invoke-Dotnet @('publish', $worker, '-c', 'Release', '-r', 'win-x64', '--self-contained', 'true',
+            '-p:RestoreLockedMode=true', '-p:DebugType=None', '-p:DebugSymbols=false', '-o', (Join-Path $publishDir 'outlook-worker'))
         Write-Host "Executable: $publishDir/TaskAssist.exe"
     }
     Write-Host "PASS: $($results.total) automated checks. Report: $resultsFile"

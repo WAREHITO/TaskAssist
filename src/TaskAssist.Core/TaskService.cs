@@ -14,26 +14,39 @@ public sealed partial class TaskService(IRepository repository, IClock clock)
             var before = repository.Load(); var after = Copy.Of(before);
             change(after); Policy.Validate(after);
             if (Copy.Json(before) == Copy.Json(after)) return;
-            var ev = new ChangeEvent { Label = label, At = clock.Now, Undoable = undoable };
+            var configurationBefore = Configuration(before.Automation); var configurationAfter = Configuration(after.Automation);
+            var configChanged = configurationBefore != configurationAfter;
+            var ev = new ChangeEvent { Label = label, At = clock.Now, Undoable = undoable,
+                ConfigurationBefore = configChanged ? configurationBefore : "", ConfigurationAfter = configChanged ? configurationAfter : "" };
             var tasksBefore = before.Tasks.ToDictionary(t => t.Id);
             var inboxBefore = before.Inbox.ToDictionary(m => m.Id);
             foreach (var task in after.Tasks)
             {
                 tasksBefore.TryGetValue(task.Id, out var old);
                 if (old is not null && Copy.Json(old) == Copy.Json(task)) continue;
-                if (old is not null) { ev.Before[task.Id] = Copy.Of(old); task.Version = old.Version + 1; }
+                if (old is not null) { ev.Before[task.Id] = Copy.Of(RedactRetainedEvidence(after,old)); task.Version = old.Version + 1; }
                 ev.After[task.Id] = Copy.Of(task);
             }
             foreach (var mail in after.Inbox)
             {
                 inboxBefore.TryGetValue(mail.Id, out var old);
                 if (old is not null && Copy.Json(old) == Copy.Json(mail)) continue;
+                // A retention operation must not copy deleted source text back into its own undo history.
+                if (mail.Purged) { mail.Version = (old?.Version ?? 0) + 1; continue; }
                 if (old is not null) { ev.InboxBefore[mail.Id] = Copy.Of(old); mail.Version = old.Version + 1; }
                 ev.InboxAfter[mail.Id] = Copy.Of(mail);
             }
             after.Events.Add(ev); after.SavedAt = clock.Now; repository.Save(before, after);
         }
     }
+    private static string Configuration(AutomationState a) => JsonSerializer.Serialize(new
+    {
+        読取り = new { a.Connector.Enabled, a.Connector.Generation, a.Connector.ConsentAt, a.Connector.StartAt, a.Connector.Folders },
+        規則 = a.Rules, 繰り返し = a.Recurrences.Select(r => r with { Through = null }),
+        本人通知 = new { a.DigestEnabled, a.DigestAccount, a.DigestRecipient, a.DigestTime, a.NotificationsPaused },
+        業務日 = new { a.Workdays, a.DaysOff, a.WorkCalendarConfirmed, a.CapacityMinutes },
+        バックアップ = new { a.BackupsEnabled, a.BackupGenerations }
+    },new JsonSerializerOptions { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
     private static WorkItem Find(Snapshot state, string id, int? version = null)
     {
         var task = state.Tasks.SingleOrDefault(t => t.Id == id) ?? throw new RuleException("仕事が見つかりません。");
@@ -54,6 +67,7 @@ public sealed partial class TaskService(IRepository repository, IClock clock)
             task.NextAction = proposed.NextAction; task.Completion = proposed.Completion;
             task.ConfirmCompletion = proposed.ConfirmCompletion; task.Note = proposed.Note;
             task.DoneSteps = proposed.DoneSteps; task.Material = proposed.Material;
+            task.EstimatedMinutes = proposed.EstimatedMinutes; task.UrgentConfirmed = proposed.UrgentConfirmed;
             task.ReviewOn = proposed.ReviewOn; task.PlannedOn = proposed.PlannedOn;
             task.ParentId = proposed.ParentId; task.Prerequisites = [.. proposed.Prerequisites]; task.Order = proposed.Order;
         });
@@ -117,7 +131,7 @@ public sealed partial class TaskService(IRepository repository, IClock clock)
         if (decision == "後で確認") { mail.ReviewOn = Japan.Day(clock.Now).AddDays(1); return; }
         if (decision == "対応不要") { mail.Status = IntakeStatus.Ignored; mail.Reason = "本人が今回のみ対応不要と確認"; return; }
         if (decision != "仕事にする") throw new RuleException("確認方法が不明です。");
-        var task = new WorkItem { Title = mail.Subject, CreatedAt = clock.Now, SourceIds = [mail.Id] };
+        var task = new WorkItem { Title = string.IsNullOrWhiteSpace(mail.Subject) ? "件名なしの依頼" : mail.Subject[..Math.Min(500, mail.Subject.Length)], Profile = s.ProfileId, CreatedAt = clock.Now, ReceivedOn = Japan.Day(mail.ReceivedAt), SourceIds = [mail.Id] };
         s.Tasks.Add(task); mail.Status = IntakeStatus.LinkedTask; mail.TaskId = task.Id;
         mail.Reason = "本人が仕事として採用・期限は未確認";
     }, false);

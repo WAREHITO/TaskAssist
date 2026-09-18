@@ -43,7 +43,7 @@ public static class LocalSession
         panel.Children.Add(new TextBlock { Text = "あなたの仕事の記録を始めましょう", FontSize = 25, FontWeight = FontWeights.SemiBold });
         panel.Children.Add(new TextBlock { Text = "所属の表示名（局・課・担当など、分かる呼び方でOK）" });
         var name = new TextBox { MaxLength = 120 }; AutomationProperties.SetName(name, "所属の表示名"); panel.Children.Add(name);
-        panel.Children.Add(new TextBlock { Text = "空の記録で始まります。架空データは入りません。\n異動するときは「設定・診断」から新しい所属を作れます。旧所属の記録は閲覧用に残ります。\n\nこの版は手動登録・カレンダー・回答管理を使うローカル版です。実メールの読取り・送信は未接続です。" });
+        panel.Children.Add(new TextBlock { Text = "空の記録で始まります。架空データは入りません。\n異動するときは「設定・診断」から新しい所属を作れます。旧所属の記録は閲覧用に残ります。\n\nOutlook連携は初期状態では停止しています。「設定・診断」で対象を選んで有効にできます。本人宛て通知・添付保存はそれぞれ別に確認します。", TextWrapping = TextWrapping.Wrap });
         var error = new TextBlock(); panel.Children.Add(error);
         var button = new Button { Content = "この所属で始める" }; panel.Children.Add(button);
         button.Click += (_, _) =>
@@ -92,6 +92,7 @@ public partial class MainWindow
     }
     private void TransferProfile()
     {
+        if (integrationBusy) { MessageBox.Show(this,"外部処理中です。自動処理を停止してから異動してください。"); return; }
         if (profiles is null) return;
         if (!string.IsNullOrWhiteSpace(QuickTitle.Text)) { MessageBox.Show(this, "入力中の用件を登録するか、入力欄を空にしてから異動してください。"); return; }
         var snapshot = service.Read();

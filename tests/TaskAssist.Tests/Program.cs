@@ -219,6 +219,8 @@ Test("REV-03", "Preference write failure retains previously saved preferences", 
 CalendarResponseTests.Run(Test, root);
 CalendarPresentationTests.Run(Test);
 ProfileTests.Run(Test, root, fixture);
+IntegrationTests.Run(Test, root);
+IntegrationRegressionTests.Run(Test, root);
 var output=args.FirstOrDefault() ?? Path.Combine(root,"results.json");
 File.WriteAllText(output,JsonSerializer.Serialize(new { version=AppRelease.Version, timestamp=DateTimeOffset.UtcNow, environment=Environment.OSVersion.VersionString, total=results.Count, failed, tests=results },new JsonSerializerOptions{WriteIndented=true}));
 Console.WriteLine($"RESULT total={results.Count} failed={failed}");

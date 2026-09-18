@@ -36,7 +36,7 @@ public sealed class SqliteRepository : IRepository, IDisposable
         using var command = connection.CreateCommand();
         command.CommandText = "PRAGMA user_version";
         var version = Convert.ToInt32(command.ExecuteScalar());
-        if (version is not (0 or 1 or 2 or AppRelease.Schema)) throw new RuleException("この版で開けない記録形式です。元の記録は保持しています。");
+        if (version is not (0 or 1 or 2 or 3 or AppRelease.Schema)) throw new RuleException("この版で開けない記録形式です。元の記録は保持しています。");
         if (version != 0)
         {
             command.CommandText = "SELECT payload FROM metadata WHERE id=1";
@@ -45,12 +45,12 @@ public sealed class SqliteRepository : IRepository, IDisposable
         }
         if (readOnly)
         {
-            if (version != AppRelease.Schema) throw new RuleException("閲覧できない記録形式です。");
+            if (version is not (3 or AppRelease.Schema)) throw new RuleException("閲覧できない記録形式です。");
             return;
         }
         // Guard old applications from silently discarding newly introduced JSON fields.
         // Back up before changing the format marker; a failed backup aborts the upgrade.
-        if (version is 1 or 2)
+        if (version is 1 or 2 or 3)
         {
             try { Backup(Path.Combine(Path.GetDirectoryName(FilePath)!, "backups")); }
             catch { connection.Dispose(); throw; }
@@ -63,7 +63,7 @@ public sealed class SqliteRepository : IRepository, IDisposable
             CREATE UNIQUE INDEX IF NOT EXISTS one_working ON tasks(profile) WHERE status=1;
             CREATE TABLE IF NOT EXISTS inbox(id TEXT PRIMARY KEY, source_key TEXT UNIQUE NOT NULL, payload BLOB NOT NULL);
             CREATE TABLE IF NOT EXISTS history(id TEXT PRIMARY KEY, payload BLOB NOT NULL);
-            PRAGMA user_version=3;
+            PRAGMA user_version=4;
             """;
         command.ExecuteNonQuery();
         command.CommandText = "INSERT OR IGNORE INTO metadata VALUES(1,0,$data)";
@@ -146,7 +146,7 @@ public sealed class SqliteRepository : IRepository, IDisposable
                     put.Parameters.AddWithValue("$id", ev.Id); put.Parameters.AddWithValue("$data", Protect(ev)); put.ExecuteNonQuery();
                 }
             var metadata = new Snapshot { ProfileId = profileId, Revision = before.Revision + 1, SavedAt = after.SavedAt,
-                LastScan = after.LastScan, DemoConnected = after.DemoConnected, TeamRoster = [.. after.TeamRoster] };
+                LastScan = after.LastScan, DemoConnected = after.DemoConnected, TeamRoster = [.. after.TeamRoster], Automation = Copy.Of(after.Automation) };
             command.CommandText = "UPDATE metadata SET revision=$revision,payload=$data WHERE id=1";
             command.Parameters.AddWithValue("$revision", metadata.Revision);
             command.Parameters.AddWithValue("$data", Protect(metadata)); command.ExecuteNonQuery();
@@ -174,18 +174,20 @@ public sealed class SqliteRepository : IRepository, IDisposable
             query.CommandText = "PRAGMA wal_checkpoint(TRUNCATE)"; query.ExecuteNonQuery();
             query.CommandText = "PRAGMA user_version"; var schema = Convert.ToInt32(query.ExecuteScalar());
             File.WriteAllText(file + ".manifest.json", JsonSerializer.Serialize(new
-            { appVersion = AppRelease.Version, schema, at = DateTimeOffset.UtcNow, protection = "DPAPI CurrentUser payload", integrity = "ok", externalActions = "disabled" }));
+            { appVersion = AppRelease.Version, schema, at = DateTimeOffset.UtcNow, protection = "DPAPI CurrentUser payload", integrity = "ok", restorePolicy = "disable external automation" }));
             return file;
         }
     }
-    public static void RestoreToNew(string backup, string destination, string profileId = "demo")
+    public static void RestoreToNew(string backup, string destination, string profileId = "demo", bool forLegacyApplication = false)
     {
         if (File.Exists(destination)) throw new RuleException("既存データへは上書き復元しません。");
         using var source = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = backup, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString());
         source.Open(); using var check = source.CreateCommand(); check.CommandText = "PRAGMA integrity_check";
         if (!Equals(check.ExecuteScalar(), "ok")) throw new RuleException("退避が破損しています。");
         check.CommandText = "PRAGMA user_version";
-        if (Convert.ToInt32(check.ExecuteScalar()) is not (1 or 2 or AppRelease.Schema)) throw new RuleException("未対応の記録形式です。");
+        var sourceVersion = Convert.ToInt32(check.ExecuteScalar());
+        if (sourceVersion is not (1 or 2 or 3 or AppRelease.Schema)) throw new RuleException("未対応の記録形式です。");
+        if (forLegacyApplication && sourceVersion != 3) throw new RuleException("旧版へ戻すには更新前の記録形式3の退避を選んでください。");
         check.CommandText = "SELECT payload FROM metadata WHERE id=1";
         var state = Unprotect<Snapshot>((byte[])(check.ExecuteScalar() ?? throw new RuleException("管理情報がありません。")));
         if (state.ProfileId != profileId) throw new RuleException("別の所属や架空データの退避は復元できません。");
@@ -205,7 +207,13 @@ public sealed class SqliteRepository : IRepository, IDisposable
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(destination))!);
         using var target = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = destination, Pooling = false }.ToString());
         target.Open(); source.BackupDatabase(target);
-        // This build has no external-action implementation or enable flag.
+        target.Close();
+        if (forLegacyApplication) return; // Verified schema 3 copy for 0.4; do not migrate it back to 4.
+        using var restored = new SqliteRepository(destination, profileId);
+        var before = restored.Load(); var after = Copy.Of(before);
+        after.Automation.RestoreGeneration++; TaskService.Suspend(after);
+        after.Automation.Connector.Health = "復元後は自動処理を停止しています。対象範囲と実行結果を確認してください。";
+        after.SavedAt = DateTimeOffset.UtcNow; restored.Save(before, after);
     }
     public void Dispose() { lock (gate) connection.Dispose(); }
 }

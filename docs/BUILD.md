@@ -23,7 +23,7 @@
 ./tools/build.ps1 -DotnetPath 'D:/Tools/dotnet/dotnet.exe'
 ```
 
-スクリプトはSDK版を確認し、固定済みの依存関係を `--locked-mode` で復元して、Desktop・自動試験・Windows画面試験用ホストをReleaseビルドする。続けて自動試験の実行ファイルを実行する。どれかが失敗したら停止する。
+スクリプトはSDK版を確認し、固定済みの依存関係を `--locked-mode` で復元して、Desktop・OutlookWorker・自動試験・Windows画面試験用ホストをReleaseビルドする。続けて自動試験の実行ファイルを実行する。どれかが失敗したら停止する。
 
 **自動試験は独自の実行プログラム。`dotnet test` ではこの試験群は実行されない。** 結果は `.artifacts/tests/<実行識別子>/automated-tests.json` に出る。ビルドログと結果JSONは個人の環境情報を含み得るので、そのまま公開しない。
 
@@ -33,7 +33,15 @@
 ./tools/build.ps1 -Publish
 ```
 
-試験に成功した後、Windows x64用の自己完結形式を `.artifacts/publish/` の新しいフォルダーに作る。SDKを追加指定する場合は `-DotnetPath` と併用できる。`TaskAssist.exe` だけを抜き出さず、出力フォルダー全体を保持する。
+試験に成功した後、Windows x64用の自己完結形式を `.artifacts/publish/` の新しいフォルダーに作る。OutlookWorkerも `outlook-worker` サブフォルダーへ発行する。SDKを追加指定する場合は `-DotnetPath` と併用できる。`TaskAssist.exe` だけを抜き出さず、出力フォルダー全体を保持する。
+
+その出力先を渡すと、説明書・第三者ライセンス・ファイルハッシュを含む配布ZIPを作る。
+
+```powershell
+./tools/package-runtime.ps1 -PublishDirectory '<今回表示された発行先>'
+```
+
+`.artifacts/releases/` の新しいフォルダーへ保存する。PDB・記録DB・試験データ・リンクを含む出力は拒否する。作成物をそのまま自動公開する処理はない。
 
 製品の起動は通常の保存先 `TaskAssist/Live` を使用する。既存の記録がある環境ではその記録を開く。ソースのビルドと自動試験は製品を自動起動しない。
 
@@ -69,6 +77,6 @@ Windowsの `LocalApplicationData` 配下に用途別のフォルダーを使う�
 
 `.github/workflows/ci.yml` はWindowsランナーで同じビルド・試験・ソースZIP作成を行う。ソースのpushとpull request、手動実行を対象にする。リリース作成、実行ファイルのアップロード、アプリデータの送信は行わない。
 
-`actions/checkout` と `actions/setup-dotnet` は確認時のコミットに固定している。ローカルでの検証とGitHub上での実行結果は別。公開準備時点ではGitHub上のワークフローは未実行。
+`actions/checkout` と `actions/setup-dotnet` は確認時のコミットに固定している。ローカルでの検証とGitHub上での実行結果は別。過去版の成功を最新変更の成功とは扱わず、該当コミットの結果を確認する。
 
 公式資料: [checkout](https://github.com/actions/checkout)、[setup-dotnet](https://github.com/actions/setup-dotnet)。
