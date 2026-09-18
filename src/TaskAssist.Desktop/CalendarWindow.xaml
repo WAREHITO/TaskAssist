@@ -1,5 +1,5 @@
 <Window x:Class="TaskAssist.Desktop.CalendarWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
- Title="カレンダー・回答集め — 架空データ版 0.3.0" Width="1360" Height="900" MinWidth="860" MinHeight="620" WindowStartupLocation="CenterOwner">
+ Title="カレンダー・回答集め" Width="1360" Height="900" MinWidth="860" MinHeight="620" WindowStartupLocation="CenterOwner">
  <DockPanel Margin="20,14">
   <StackPanel DockPanel.Dock="Top">
    <TextBlock Text="カレンダー・回答集め" FontSize="25" FontWeight="SemiBold"/>

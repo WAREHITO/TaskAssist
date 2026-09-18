@@ -4,7 +4,7 @@ namespace TaskAssist.Core;
 
 public static class AppRelease
 {
-    public const string Version = "1.0.0-rc.1";
+    public const string Version = "1.0.0-rc.2";
     public const int Schema = 4;
 }
 public enum CaseColor { Blue, Teal, Violet, Amber, Rose }

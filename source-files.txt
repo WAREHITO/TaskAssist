@@ -6,6 +6,7 @@ CHANGELOG.md
 CONTRIBUTING.md
 Directory.Build.props
 docs/BUILD.md
+docs/ICON.md
 docs/IMPLEMENTATION_STATUS.md
 docs/OUTLOOK.md
 docs/PUBLISHING.md
@@ -45,6 +46,8 @@ src/TaskAssist.Core/TaskAssist.Core.csproj
 src/TaskAssist.Core/TaskService.cs
 src/TaskAssist.Desktop/App.xaml
 src/TaskAssist.Desktop/App.xaml.cs
+src/TaskAssist.Desktop/Assets/TaskAssist.ico
+src/TaskAssist.Desktop/Assets/TaskAssist.png
 src/TaskAssist.Desktop/CalendarWindow.Presentation.cs
 src/TaskAssist.Desktop/CalendarWindow.xaml
 src/TaskAssist.Desktop/CalendarWindow.xaml.cs
@@ -73,5 +76,6 @@ tests/TaskAssist.WindowsTests/Program.cs
 tests/TaskAssist.WindowsTests/TaskAssist.WindowsTests.csproj
 THIRD_PARTY_NOTICES.md
 tools/build.ps1
+tools/create-icon.ps1
 tools/package-runtime.ps1
 tools/package-source.ps1

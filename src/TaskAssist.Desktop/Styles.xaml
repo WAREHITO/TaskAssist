@@ -1,6 +1,11 @@
-<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:TaskAssist.Desktop">
 
-  <Style TargetType="Window"><Setter Property="FontFamily" Value="Yu Gothic UI"/><Setter Property="FontSize" Value="15"/><Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"/><Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"/></Style>
+  <Style x:Key="TaskAssistWindowIcon" TargetType="Window"><Setter Property="Icon" Value="pack://application:,,,/TaskAssist;component/Assets/TaskAssist.ico"/></Style>
+  <Style TargetType="Window" BasedOn="{StaticResource TaskAssistWindowIcon}"><Setter Property="FontFamily" Value="Yu Gothic UI"/><Setter Property="FontSize" Value="15"/><Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"/><Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"/></Style>
+  <!-- Implicit styles use exact types; derived windows need their own icon setter. -->
+  <Style TargetType="local:MainWindow" BasedOn="{StaticResource TaskAssistWindowIcon}"/>
+  <Style TargetType="local:CalendarWindow" BasedOn="{StaticResource TaskAssistWindowIcon}"/>
+  <Style TargetType="local:ArchiveWindow" BasedOn="{StaticResource TaskAssistWindowIcon}"/>
   <Style TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap"/><Setter Property="Margin" Value="0,3,0,5"/></Style>
   <Style TargetType="Button"><Setter Property="Padding" Value="14,7"/><Setter Property="Margin" Value="0,4,8,4"/><Setter Property="MinHeight" Value="36"/></Style>
   <Style TargetType="TextBox"><Setter Property="Padding" Value="8"/><Setter Property="Margin" Value="0,2,0,9"/></Style>

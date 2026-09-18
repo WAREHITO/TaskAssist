@@ -26,7 +26,7 @@ public partial class CalendarWindow : Window
     public CalendarWindow(TaskService service, IClock clock)
     {
         InitializeComponent(); this.service = service; this.clock = clock;
-        Title = "カレンダー・回答集め — " + (service.Read().IsDemo ? "架空画面試験" : "ローカル版 0.4.0");
+        Title = "カレンダー・回答集め — " + (service.Read().IsDemo ? "架空画面試験" : AppRelease.Version + " 接続検証版");
         selectedDay = Japan.Day(clock.Now); month = new DateOnly(selectedDay.Year, selectedDay.Month, 1);
         MaxHeight = Math.Max(620, SystemParameters.WorkArea.Height - 35);
         Loaded += (_, _) => { Refresh(); UpdatePaneLayout(); };

@@ -28,7 +28,7 @@ Get-ChildItem -LiteralPath $source -Force | Copy-Item -Destination $stage -Recur
 foreach ($file in @('README.md','THIRD_PARTY_NOTICES.md')) { Copy-Item -LiteralPath (Join-Path $repositoryRoot $file) -Destination $stage }
 $guide = Join-Path $stage 'docs'
 New-Item -ItemType Directory -Path $guide | Out-Null
-foreach ($file in @('USER_GUIDE.md','OUTLOOK.md','IMPLEMENTATION_STATUS.md','RELEASE_NOTES.md')) {
+foreach ($file in @('USER_GUIDE.md','OUTLOOK.md','IMPLEMENTATION_STATUS.md','RELEASE_NOTES.md','ICON.md')) {
     Copy-Item -LiteralPath (Join-Path $repositoryRoot "docs/$file") -Destination $guide
 }
 Copy-Item -LiteralPath (Join-Path $repositoryRoot 'licenses') -Destination $stage -Recurse

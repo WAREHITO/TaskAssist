@@ -30,6 +30,6 @@
 
 `tools/build.ps1 -Publish` の出力を `tools/package-runtime.ps1 -PublishDirectory` へ渡し、実行ファイルと必要な部品を含むZIP・SHA-256を作る。中身を点検してからGitHub Releasesへ公開する。`TaskAssist.exe`単体は配布単位ではない。ローカルの業務DBやアプリ設定を混ぜない。
 
-1.0.0-rc.1 は接続検証版。公開時にはpre-releaseとして実機未検証の範囲を明記する。ソースのpush、Actions成功、Releaseのアップロード成功は、それぞれ実際の結果を確認する。認証・権限エラーを公開成功と扱わない。
+1.0.0-rc.2 は接続検証版。公開時にはpre-releaseとして実機未検証の範囲を明記する。ソースのpush、Actions成功、Releaseのアップロード成功は、それぞれ実際の結果を確認する。認証・権限エラーを公開成功と扱わない。
 
 GitHub上でワークフローが有効なら、公開後のpush等でビルド・架空データ試験が実行され、ログがGitHub上に残る。このため、後から実業務データを試験ファイルに加えない。
